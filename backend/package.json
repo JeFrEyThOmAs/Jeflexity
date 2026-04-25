@@ -10,6 +10,8 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@langchain/core": "^1.1.41",
+    "@langchain/google-genai": "^2.1.28",
     "@tavily/core": "^0.7.2",
     "@types/express": "^5.0.6",
     "dotenv": "^17.4.2",
