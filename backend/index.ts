@@ -1,23 +1,72 @@
+// import express from "express";
+// import {tavily} from "@tavily/core"
+// import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+// process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
+// import dotenv from "dotenv"
+// import { PROMPT_TEMPLATE, SYSTEM_PROMPT } from "./prompt";
+// import { prisma } from "./db";
+
+// dotenv.config()
+import dotenv from "dotenv";
+dotenv.config({ override: true }); // MUST BE HERE, before any other local imports!
+
 import express from "express";
-import {tavily} from "@tavily/core"
+import { tavily } from "@tavily/core";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-
-import dotenv from "dotenv"
 import { PROMPT_TEMPLATE, SYSTEM_PROMPT } from "./prompt";
+import { prisma } from "./db"; // Now when this loads, process.env is guaranteed to be correct
 
-dotenv.config()
-
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 const app = express();
+// ... rest of your code
+
+
 
 
 const client = tavily({ apiKey: process.env.TAVILY_API_KEY });
 
 app.use(express.json());
 
+
 const llm = new ChatGoogleGenerativeAI({
   model: "gemini-2.5-flash",
   apiKey: process.env.GEMINI_API_KEY,
 });
+
+app.get("/test-db", async (req, res) => {
+  try {
+    const user = await prisma.user.create({
+      data: {
+        email: "test2@gmail.com",
+        provider: "Github",
+        name: "test2",
+      },
+    });
+
+    res.json(user);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("DB error");
+  }
+});
+app.post("/signup" , async(req , res) => {
+
+})
+
+app.post("signin" , async(req, res) => {
+
+})
+
+app.get("/conversation" , async(req, res) => {
+
+})
+
+app.get("/conversation/:conversationId" , async(req, res) => {
+
+})
+
+
 
 app.get("/", async (req, res) => {
     try {
