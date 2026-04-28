@@ -14,10 +14,29 @@ const client = tavily({ apiKey: process.env.TAVILY_API_KEY });
 
 app.use(express.json());
 
+
 const llm = new ChatGoogleGenerativeAI({
   model: "gemini-2.5-flash",
   apiKey: process.env.GEMINI_API_KEY,
 });
+
+app.post("/signup" , async(req , res) => {
+
+})
+
+app.post("signin" , async(req, res) => {
+
+})
+
+app.get("/conversation" , async(req, res) => {
+
+})
+
+app.get("/conversation/:conversationId" , async(req, res) => {
+
+})
+
+
 
 app.get("/", async (req, res) => {
     try {
