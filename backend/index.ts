@@ -50,13 +50,7 @@ app.get("/test-db", async (req, res) => {
     res.status(500).send("DB error");
   }
 });
-app.post("/signup" , async(req , res) => {
 
-})
-
-app.post("signin" , async(req, res) => {
-
-})
 
 app.get("/conversation" , async(req, res) => {
 
