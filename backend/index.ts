@@ -1,25 +1,17 @@
-// import express from "express";
-// import {tavily} from "@tavily/core"
-// import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-// process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
-// import dotenv from "dotenv"
-// import { PROMPT_TEMPLATE, SYSTEM_PROMPT } from "./prompt";
-// import { prisma } from "./db";
-
-// dotenv.config()
 import dotenv from "dotenv";
-dotenv.config({ override: true }); // MUST BE HERE, before any other local imports!
-
+dotenv.config({ override: true });
+import cors from "cors";
 import express from "express";
 import { tavily } from "@tavily/core";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { PROMPT_TEMPLATE, SYSTEM_PROMPT } from "./prompt";
-import { prisma } from "./db"; // Now when this loads, process.env is guaranteed to be correct
+import { prisma } from "./db"; 
+import { middleware } from "./middleware";
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 const app = express();
-// ... rest of your code
+
 
 
 
@@ -27,6 +19,7 @@ const app = express();
 const client = tavily({ apiKey: process.env.TAVILY_API_KEY });
 
 app.use(express.json());
+app.use(cors())
 
 
 const llm = new ChatGoogleGenerativeAI({
@@ -52,11 +45,13 @@ app.get("/test-db", async (req, res) => {
 });
 
 
-app.get("/conversation" , async(req, res) => {
-
+app.get("/conversation" ,middleware , async(req, res) => {
+    res.json({
+      userId : req.userId
+    })
 })
 
-app.get("/conversation/:conversationId" , async(req, res) => {
+app.get("/conversation/:conversationId" , middleware, async(req, res) => {
 
 })
 
@@ -74,7 +69,9 @@ app.get("/", async (req, res) => {
       res.status(500).send("Error fetching data");
     }
 });
-app.post("/jefplexity_ask" , async(req , res) => {
+
+
+app.post("/jefplexity_ask" , middleware , async(req , res) => {
     // step 1 :  get the query from teh user 
     const query = req.body.query;
     // step 2 : make sure the user has credits/access to the endpoint 
@@ -120,7 +117,7 @@ app.post("/jefplexity_ask" , async(req , res) => {
     res.end();
 })
 
-app.post("/jefplexity_ask/follow_up" , async(req , res) => {
+app.post("/jefplexity_ask/follow_up" , middleware, async(req , res) => {
     // step 1 : get the existing chat from the db 
 
     // step 2 : Forward the full history to the llm 
@@ -130,4 +127,4 @@ app.post("/jefplexity_ask/follow_up" , async(req , res) => {
 
 })
 
-app.listen(3000)
+app.listen(3001)
