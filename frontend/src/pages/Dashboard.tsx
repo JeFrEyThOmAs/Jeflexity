@@ -14,14 +14,14 @@ export default function Dashboard() {
   const [user , setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    async function getUser() {
-      const {data , error} = await supabase.auth.getUser()
-      if(data?.user){
-        setUser(data.user)
+    async function init() {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.user) {
+        setUser(data.session.user);
       }
     }
-    getUser()
-  }, [])
+    init();
+  }, []);
 
   useEffect(() => {
     async function getExistingConversations(){

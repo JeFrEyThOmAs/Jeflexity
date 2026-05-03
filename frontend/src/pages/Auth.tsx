@@ -7,7 +7,10 @@ const supabase = createClient()
 export default function Auth() {
     async function login(provider : "github" | "google") {
         const {data , error } = await supabase.auth.signInWithOAuth({
-            provider : provider
+            provider : provider,
+            options: {
+              redirectTo: "http://localhost:3000/conversation"
+            }
         })
         if (error) {
             alert("error while signing in")
