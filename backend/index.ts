@@ -8,6 +8,7 @@ import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { PROMPT_TEMPLATE, SYSTEM_PROMPT } from "./prompt";
 import { prisma } from "./db"; 
 import { middleware } from "./middleware";
+import type { Request } from "express";
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 const app = express();
@@ -27,6 +28,27 @@ const llm = new ChatGoogleGenerativeAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
+type AuthedRequest = Request & {
+  userId?: string;
+};
+
+function createConversationSlug(query: string) {
+  return query
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .slice(0, 80) || "new-conversation";
+}
+
+function extractAnswerFromModelOutput(output: string) {
+  const match = output.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/i);
+  if (!match?.[1]) {
+    return output;
+  }
+  return match[1].trim();
+}
+
 app.get("/test-db", async (req, res) => {
   try {
     const user = await prisma.user.create({
@@ -34,6 +56,7 @@ app.get("/test-db", async (req, res) => {
         email: "test2@gmail.com",
         provider: "Github",
         name: "test2",
+        supabaseId: "test2",
       },
     });
 
@@ -46,13 +69,81 @@ app.get("/test-db", async (req, res) => {
 
 
 app.get("/conversation" ,middleware , async(req, res) => {
-    res.json({
-      userId : req.userId
-    })
+    try {
+      const userId = (req as AuthedRequest).userId;
+      if (!userId) {
+        res.status(403).json({ message: "Unauthorized" });
+        return;
+      }
+
+      const conversations = await prisma.conversation.findMany({
+        where: { userId },
+        orderBy: { id: "desc" },
+        include: {
+          messages: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+          },
+        },
+      });
+
+      res.json({
+        conversations: conversations.map((conversation) => ({
+          id: conversation.id,
+          title: conversation.title,
+          slug: conversation.slug,
+          lastMessage: conversation.messages[0]?.content ?? null,
+        })),
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Failed to fetch conversations" });
+    }
 })
 
 app.get("/conversation/:conversationId" , middleware, async(req, res) => {
+  try {
+    const userId = (req as AuthedRequest).userId;
+    const rawConversationId = req.params.conversationId;
 
+    if (!userId) {
+      res.status(403).json({ message: "Unauthorized" });
+      return;
+    }
+
+    if (!rawConversationId || typeof rawConversationId !== "string") {
+      res.status(400).json({ message: "conversationId is required" });
+      return;
+    }
+
+    const conversationId = rawConversationId;
+
+    const conversation = await prisma.conversation.findUnique({
+      where: {
+        id: conversationId,
+      },
+      include: {
+        messages: {
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
+
+    if (!conversation || conversation.userId !== userId) {
+      res.status(404).json({ message: "Conversation not found" });
+      return;
+    }
+
+    res.json({
+      id: conversation.id,
+      title: conversation.title,
+      slug: conversation.slug,
+      messages: conversation.messages,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Failed to fetch conversation" });
+  }
 })
 
 
@@ -71,60 +162,166 @@ app.get("/", async (req, res) => {
 });
 
 
-app.post("/jefplexity_ask" , middleware , async(req , res) => {
-    // step 1 :  get the query from teh user 
-    const query = req.body.query;
-    // step 2 : make sure the user has credits/access to the endpoint 
+app.post("/jefplexity_ask", middleware, async (req, res) => {
+    try {
+      const userId = (req as AuthedRequest).userId;
+      const query = req.body?.query;
 
-    // step 3 : check if we have web searched index for a similar query
+      if (!userId) {
+        res.status(403).json({ message: "Unauthorized" });
+        return;
+      }
 
-    // step 4 :  we do web search to gather resources 
-    const webSearchResponse = await client.search(query, {
+      if (!query || typeof query !== "string" || !query.trim()) {
+        res.status(400).json({ message: "query is required" });
+        return;
+      }
+
+      const webSearchResponse = await client.search(query, {
         searchDepth: "advanced"
-    });
+      });
 
-    const webSearchResults = webSearchResponse.results
-    
-    // step 5 : do some context engineering on the prompt + web search response 
-    const prompt = PROMPT_TEMPLATE
-    .replace("{{WEB_SEARCH_RESULTS}}", JSON.stringify(webSearchResults))
-    .replace("{{USER_QUERY}}", query);
+      const webSearchResults = webSearchResponse.results;
+      
+      const prompt = PROMPT_TEMPLATE
+      .replace("{{WEB_SEARCH_RESULTS}}", JSON.stringify(webSearchResults))
+      .replace("{{USER_QUERY}}", query);
 
-    // step 6 : hit the llm 
+      const result = await llm.invoke([
+        {
+          role: "system",
+          content: SYSTEM_PROMPT,
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ]);
 
-    const result = await llm.invoke([
-      {
-        role: "system",
-        content: SYSTEM_PROMPT,
-      },
-      {
-        role: "user",
-        content: prompt,
-      },
-    ]);
+      const modelOutput = typeof result.content === "string"
+        ? result.content
+        : JSON.stringify(result.content);
+      const assistantAnswer = extractAnswerFromModelOutput(modelOutput);
 
-    // step 7 : stream back the response 
-    res.write(result.content);
-    res.write("\n-----------SOURCES-----------\n");
+      const conversation = await prisma.conversation.create({
+        data: {
+          userId,
+          title: query.trim().slice(0, 80),
+          slug: createConversationSlug(query),
+          messages: {
+            create: [
+              { content: query.trim(), role: "User" },
+              { content: assistantAnswer, role: "Assistant" },
+            ],
+          },
+        },
+      });
 
-
-    // step 8 : also stream back the sources and the follow up questions (which we get from another parallel llm calls)
-    res.write("\n<sources>\n")
-    res.write(JSON.stringify(webSearchResults.map(result => ({url : result.url}))));
-    res.write("\n</sources>\n");
-  
-    // step 9 : close the event stream 
-    res.end();
+      res.json({
+        conversationId: conversation.id,
+        answer: modelOutput,
+        sources: webSearchResults.map((searchResult) => ({ url: searchResult.url })),
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Failed to process query" });
+    }
 })
 
 app.post("/jefplexity_ask/follow_up" , middleware, async(req , res) => {
-    // step 1 : get the existing chat from the db 
+    try {
+      const userId = (req as AuthedRequest).userId;
+      const conversationId = req.body?.conversationId;
+      const query = req.body?.query;
 
-    // step 2 : Forward the full history to the llm 
-    // step 2.5 :  do context engineering here.
+      if (!userId) {
+        res.status(403).json({ message: "Unauthorized" });
+        return;
+      }
 
-    // step 3 : Stream the response back to the user 
+      if (!conversationId || typeof conversationId !== "string") {
+        res.status(400).json({ message: "conversationId is required" });
+        return;
+      }
 
+      if (!query || typeof query !== "string" || !query.trim()) {
+        res.status(400).json({ message: "query is required" });
+        return;
+      }
+
+      const conversation = await prisma.conversation.findFirst({
+        where: {
+          id: conversationId,
+          userId,
+        },
+        include: {
+          messages: {
+            orderBy: { createdAt: "asc" },
+          },
+        },
+      });
+
+      if (!conversation) {
+        res.status(404).json({ message: "Conversation not found" });
+        return;
+      }
+
+      const webSearchResponse = await client.search(query, {
+        searchDepth: "advanced",
+      });
+      const webSearchResults = webSearchResponse.results;
+
+      const history = conversation.messages
+        .map((message) => `${message.role}: ${message.content}`)
+        .join("\n");
+
+      const followUpPrompt = `${PROMPT_TEMPLATE
+        .replace("{{WEB_SEARCH_RESULTS}}", JSON.stringify(webSearchResults))
+        .replace("{{USER_QUERY}}", query)}
+
+## Conversation history
+${history}`;
+
+      const result = await llm.invoke([
+        {
+          role: "system",
+          content: SYSTEM_PROMPT,
+        },
+        {
+          role: "user",
+          content: followUpPrompt,
+        },
+      ]);
+
+      const modelOutput = typeof result.content === "string"
+        ? result.content
+        : JSON.stringify(result.content);
+      const assistantAnswer = extractAnswerFromModelOutput(modelOutput);
+
+      await prisma.messages.createMany({
+        data: [
+          {
+            conversationId: conversation.id,
+            role: "User",
+            content: query.trim(),
+          },
+          {
+            conversationId: conversation.id,
+            role: "Assistant",
+            content: assistantAnswer,
+          },
+        ],
+      });
+
+      res.json({
+        conversationId: conversation.id,
+        answer: modelOutput,
+        sources: webSearchResults.map((searchResult) => ({ url: searchResult.url })),
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Failed to process follow up" });
+    }
 })
 
 app.listen(3001)
