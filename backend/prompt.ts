@@ -45,10 +45,10 @@ Example <FOLLOW_UPS> tone (your questions must be NEW, not copies):
 </FOLLOW_UPS>
 `
 
-export const PROMPT_TEMPLATE = `
+export const HUMAN_PROMPT_TEMPLATE = `
     ## Web search results
-    {{WEB_SEARCH_RESULTS}}
+    {web_search_results}
 
     ## USER_QUERY
-    {{USER_QUERY}}
+    {user_query}{conversation_suffix}
 `

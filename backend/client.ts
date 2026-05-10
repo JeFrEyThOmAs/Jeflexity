@@ -6,6 +6,6 @@ dotenv.config()
 export function createSupabaseClient() {
   return createClient(
     process.env.SUPABASE_URL!,
-    process.env.SUPABASE_API_SECRET!
+    process.env.SUPABASE_API_SECRET!,
   )
 }

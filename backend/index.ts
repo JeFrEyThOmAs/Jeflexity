@@ -5,7 +5,10 @@ import cors from "cors";
 import express from "express";
 import { tavily } from "@tavily/core";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-import { PROMPT_TEMPLATE, SYSTEM_PROMPT } from "./prompt";
+import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { RunnableSequence } from "@langchain/core/runnables";
+import { StringOutputParser } from "@langchain/core/output_parsers";
+import { HUMAN_PROMPT_TEMPLATE, SYSTEM_PROMPT } from "./prompt";
 import { prisma } from "./db"; 
 import { middleware } from "./middleware";
 import type { Request } from "express";
@@ -27,6 +30,17 @@ const llm = new ChatGoogleGenerativeAI({
   model: "gemini-2.5-flash",
   apiKey: process.env.GEMINI_API_KEY,
 });
+
+const chatPrompt = ChatPromptTemplate.fromMessages([
+  ["system", SYSTEM_PROMPT],
+  ["human", HUMAN_PROMPT_TEMPLATE],
+]);
+
+const jefplexityChain = RunnableSequence.from([
+  chatPrompt,
+  llm,
+  new StringOutputParser(),
+]);
 
 type AuthedRequest = Request & {
   userId?: string;
@@ -182,25 +196,12 @@ app.post("/jefplexity_ask", middleware, async (req, res) => {
       });
 
       const webSearchResults = webSearchResponse.results;
-      
-      const prompt = PROMPT_TEMPLATE
-      .replace("{{WEB_SEARCH_RESULTS}}", JSON.stringify(webSearchResults))
-      .replace("{{USER_QUERY}}", query);
 
-      const result = await llm.invoke([
-        {
-          role: "system",
-          content: SYSTEM_PROMPT,
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ]);
-
-      const modelOutput = typeof result.content === "string"
-        ? result.content
-        : JSON.stringify(result.content);
+      const modelOutput = await jefplexityChain.invoke({
+        web_search_results: JSON.stringify(webSearchResults),
+        user_query: query,
+        conversation_suffix: "",
+      });
       const assistantAnswer = extractAnswerFromModelOutput(modelOutput);
 
       const conversation = await prisma.conversation.create({
@@ -275,27 +276,16 @@ app.post("/jefplexity_ask/follow_up" , middleware, async(req , res) => {
         .map((message) => `${message.role}: ${message.content}`)
         .join("\n");
 
-      const followUpPrompt = `${PROMPT_TEMPLATE
-        .replace("{{WEB_SEARCH_RESULTS}}", JSON.stringify(webSearchResults))
-        .replace("{{USER_QUERY}}", query)}
+      const conversation_suffix = `
 
 ## Conversation history
 ${history}`;
 
-      const result = await llm.invoke([
-        {
-          role: "system",
-          content: SYSTEM_PROMPT,
-        },
-        {
-          role: "user",
-          content: followUpPrompt,
-        },
-      ]);
-
-      const modelOutput = typeof result.content === "string"
-        ? result.content
-        : JSON.stringify(result.content);
+      const modelOutput = await jefplexityChain.invoke({
+        web_search_results: JSON.stringify(webSearchResults),
+        user_query: query,
+        conversation_suffix,
+      });
       const assistantAnswer = extractAnswerFromModelOutput(modelOutput);
 
       await prisma.messages.createMany({
