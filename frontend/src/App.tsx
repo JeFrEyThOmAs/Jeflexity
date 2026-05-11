@@ -4,11 +4,12 @@ import { useEffect, useState } from "react";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import { createClient } from "./lib/supabase/client";
+import LandingPage from "./pages/LandingPage";
 
 const supabase = createClient();
 
 function ProtectedRoute({ hasSession }: { hasSession: boolean }) {
-  return hasSession ? <Outlet /> : <Navigate to="/auth" replace />;
+  return hasSession ? <Outlet /> : <Navigate to="/" replace />;
 }
 
 function PublicOnlyRoute({ hasSession }: { hasSession: boolean }) {
@@ -45,15 +46,17 @@ export function App() {
   return (
    <BrowserRouter>
     <Routes>
-      <Route element={<PublicOnlyRoute hasSession={hasSession} />}>
-        <Route path="/auth" element={<Auth />} />
-      </Route>
+    <Route path="/" element={<LandingPage />} />
 
-      <Route element={<ProtectedRoute hasSession={hasSession} />}>
-        <Route path="/conversation" element={<Dashboard />} />
-      </Route>
+<Route element={<PublicOnlyRoute hasSession={hasSession} />}>
+  <Route path="/auth" element={<Auth />} />
+</Route>
 
-      <Route path="*" element={<Navigate to="/conversation" replace />} />
+<Route element={<ProtectedRoute hasSession={hasSession} />}>
+  <Route path="/conversation" element={<Dashboard />} />
+</Route>
+
+<Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
    </BrowserRouter>
    );
