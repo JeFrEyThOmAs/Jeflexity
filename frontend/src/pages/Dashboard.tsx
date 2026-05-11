@@ -185,7 +185,7 @@ export default function Dashboard() {
       const { data } = await supabase.auth.getSession();
       if (!data.session?.user) {
         localStorage.removeItem("jefplexity-authenticated");
-        navigate("/auth", { replace: true });
+
         return;
       }
 

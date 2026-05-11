@@ -1,8 +1,7 @@
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
+import { GitBranch } from "lucide-react";
 import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 
 const supabase = createClient();
 
@@ -32,24 +31,67 @@ export default function Auth() {
   }
 
   return (
-    <main className="min-h-screen w-full bg-background text-foreground">
-      <div className="mx-auto flex min-h-screen w-full max-w-5xl items-center justify-center px-6">
-        <Card className="w-full max-w-md border-border/60 bg-card/80 backdrop-blur-sm">
-          <CardHeader className="space-y-2">
-            <CardTitle className="text-2xl font-semibold">Welcome to Jefplexity</CardTitle>
-            <CardDescription>Sign in to start researching with a Perplexity-style assistant.</CardDescription>
-          </CardHeader>
+    <main className="relative min-h-screen overflow-hidden bg-black text-white">
+      {/* Background Glow */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.18),transparent_35%)] pointer-events-none" />
 
-          <CardContent className="space-y-3">
-            <Button className="w-full" size="lg" onClick={() => login("google")}>
+      {/* Navbar */}
+      <nav className="relative z-10 flex items-center justify-between px-6 md:px-12 py-6 border-b border-white/10">
+        <Link
+          to="/"
+          className="text-2xl font-semibold tracking-tight"
+        >
+          Sapien<span className="text-indigo-400">X</span>
+        </Link>
+
+        <Link
+          to="/"
+          className="text-sm text-white/60 hover:text-white transition"
+        >
+          Back to Home
+        </Link>
+      </nav>
+
+      {/* Auth Section */}
+      <section className="relative z-10 flex min-h-[calc(100vh-80px)] items-center justify-center px-6">
+        <div className="w-full max-w-md rounded-3xl border border-white/10 bg-white/5 backdrop-blur-2xl p-8 shadow-2xl shadow-indigo-500/10">
+          <div className="mb-8 text-center">
+            <div className="inline-flex items-center gap-2 border border-white/10 bg-white/5 rounded-full px-4 py-2 text-sm text-white/70 mb-6">
+              Continue to SapienX
+            </div>
+
+            <h1 className="text-4xl font-semibold tracking-tight">
+              Welcome Back
+            </h1>
+
+            <p className="mt-4 text-white/60 leading-relaxed">
+              Sign in to continue exploring the web with AI-powered search,
+              sources, and follow-up conversations.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            <button
+              onClick={() => login("google")}
+              className="w-full rounded-2xl bg-white text-black py-3.5 font-medium transition hover:bg-white/90"
+            >
               Continue with Google
-            </Button>
-            <Button className="w-full" size="lg" variant="secondary" onClick={() => login("github")}>
+            </button>
+
+            <button
+              onClick={() => login("github")}
+              className="w-full rounded-2xl border border-white/10 bg-white/5 py-3.5 font-medium text-white transition hover:bg-white/10 flex items-center justify-center gap-2"
+            >
+              <GitBranch className="size-5" />
               Continue with GitHub
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+            </button>
+          </div>
+
+          <div className="mt-8 text-center text-sm text-white/40">
+            By continuing, you agree to explore smarter 😄
+          </div>
+        </div>
+      </section>
     </main>
   );
 }
